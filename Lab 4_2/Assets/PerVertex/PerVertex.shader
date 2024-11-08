@@ -63,9 +63,19 @@ Shader "Custom/PerVertex"
                 float3 ambient = _AmbientColor.rgb;
 
                 // Calculate diffuse term
-                float3 lightDir = normalize(_WorldSpaceLightPos0.xyz); // Directional light direction
+                float3 lightDir;
+                float attenuation = 1.0;
+                if (_WorldSpaceLightPos0.w == 0.0)
+                    lightDir = normalize(_WorldSpaceLightPos0.xyz); // Directional light direction
+                else
+                {
+                    lightDir = _WorldSpaceLightPos0.xyz - mul(IN.vertex, unity_ObjectToWorld);
+                    attenuation = 1.0/length(lightDir);
+                    lightDir = normalize(lightDir);
+                }
+                    
                 float NdotL = max(dot(worldNormal, lightDir), 0.0); // Lambertian diffuse factor
-                float3 diffuse = _DiffuseColor.rgb * NdotL; // Diffuse component
+                float3 diffuse = _DiffuseColor.rgb * attenuation * NdotL; // Diffuse component
 
                 // Calculate specular term
                 float3 viewDir = normalize(_WorldSpaceCameraPos - mul(unity_ObjectToWorld, IN.vertex).xyz); // View direction
