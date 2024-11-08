@@ -44,6 +44,7 @@ Shader "Custom/PerFragmentPhongShader"
                 float3 worldNormal : TEXCOORD1; // World space normal
                 float3 worldPos : TEXCOORD2; // World space position
                 float2 uv : TEXCOORD0; // Pass through texture coordinates
+                float3 posOS : TEXCOORD3;
             };
 
             // Vertex shader
@@ -58,6 +59,8 @@ Shader "Custom/PerFragmentPhongShader"
                 OUT.worldNormal = normalize(mul(IN.normal, (float3x3) unity_WorldToObject));
                 OUT.worldPos = mul(unity_ObjectToWorld, IN.vertex).xyz;
 
+                OUT.posOS = IN.vertex;
+
                 return OUT;
             }
 
@@ -69,14 +72,24 @@ Shader "Custom/PerFragmentPhongShader"
 
                 // Lighting calculations in fragment shader
     
-                float4 lightDir = normalize(_WorldSpaceLightPos0); // Directional light direction
+                float3 lightDir;
+                float attenuation = 1.0;
+                if (_WorldSpaceLightPos0.w == 0.0)
+                    lightDir = normalize(_WorldSpaceLightPos0.xyz); // Directional light direction
+                else
+                {
+                    lightDir = _WorldSpaceLightPos0.xyz - mul(IN.posOS, unity_ObjectToWorld);
+                    attenuation = 1.0/length(lightDir);
+                    lightDir = normalize(lightDir);
+                }
+
                 float3 viewDir = normalize(_WorldSpaceCameraPos - IN.worldPos); // View direction
                 float3 normal = normalize(IN.worldNormal); // Surface normal
 
                 // Diffuse lighting calculation
     
                 float NdotL = max(dot(normal, lightDir), 0.0); // Lambertian diffuse factor
-                float4 diffuse = _DiffuseColor * NdotL; // Diffuse component
+                float4 diffuse = attenuation * _DiffuseColor * NdotL; // Diffuse component
 
                 // Specular lighting calculation
     
