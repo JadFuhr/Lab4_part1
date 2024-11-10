@@ -52,12 +52,15 @@ Shader "Custom/PerFragmentPhongShader"
             FragmentInput vert(VertexInput IN)
             {
                 FragmentInput OUT;
-                OUT.pos = UnityObjectToClipPos(IN.vertex); // Transform vertex position to clip space
+                OUT.pos = UnityObjectToClipPos(IN.vertex); // transforms the vertex position to clip space for rendering on screen.
                 OUT.uv = IN.uv; // Pass UV coordinates
 
                 // Transform normal and position to world space
-                OUT.worldNormal = normalize(mul(IN.normal, (float3x3) unity_WorldToObject));
-                OUT.worldPos = mul(unity_ObjectToWorld, IN.vertex).xyz;
+
+                OUT.worldNormal = normalize(mul(IN.normal, (float3x3) unity_WorldToObject));    // this line converts the object-space normal into world space 
+                                                                                                //(adjusting for any rotations or scaling of the object) and ensures it has a length of 1
+
+                OUT.worldPos = mul(unity_ObjectToWorld, IN.vertex).xyz;     // converts the vertex position to world space, essential for lighting calculations in the fragment shader.
 
                 OUT.posOS = IN.vertex;
 
@@ -73,35 +76,65 @@ Shader "Custom/PerFragmentPhongShader"
                 // Lighting calculations in fragment shader
     
                 float3 lightDir;
+
                 float attenuation = 1.0;
-                if (_WorldSpaceLightPos0.w == 0.0)
+
+                if (_WorldSpaceLightPos0.w == 0.0)          // If the light is directional (_WorldSpaceLightPos0.w == 0.0), it uses a fixed direction.
+                {
                     lightDir = normalize(_WorldSpaceLightPos0.xyz); // Directional light direction
+                }
                 else
                 {
-                    lightDir = _WorldSpaceLightPos0.xyz - mul(IN.posOS, unity_ObjectToWorld);
-                    attenuation = 1.0/length(lightDir);
-                    lightDir = normalize(lightDir);
+                    lightDir = _WorldSpaceLightPos0.xyz - mul(IN.posOS, unity_ObjectToWorld);   // _WorldSpaceLightPos0.xyz represents the position of the light in world space. 
+
+                                                                                                //mul(IN.posOS, unity_ObjectToWorld) converts the current vertex position from object
+                                                                                                // space to world space, allowing it to be directly compared with the light's position.
+
+                                                                                                //lightDir = _WorldSpaceLightPos0.xyz - mul(IN.posOS, unity_ObjectToWorld); calculates 
+                                                                                                // the vector pointing from the vertex to the light source by subtracting the vertex's 
+                                                                                                // world-space position from the light's world-space position.
+
+                    attenuation = 1.0/length(lightDir);         // length(lightDir) computes the distance from the vertex to the light source by finding the magnitude (or length) 
+                                                                // of the lightDir vector.
+
+                                                                // attenuation = 1.0 / length(lightDir); calculates the attenuation factor, which decreases the light's intensity  
+                                                                // as the distance between the vertex and the light source increases.
+
+                    lightDir = normalize(lightDir);             // normalize(lightDir) scales the lightDir vector to a unit length (1), preserving only its direction.
+                                                                //This normalized lightDir is used in the dot product calculations in the lighting model, allowing the 
+                                                                // shader to use only the direction of the light without its distance affecting the calculations.
                 }
 
                 float3 viewDir = normalize(_WorldSpaceCameraPos - IN.worldPos); // View direction
+
                 float3 normal = normalize(IN.worldNormal); // Surface normal
 
                 // Diffuse lighting calculation
     
-                float NdotL = max(dot(normal, lightDir), 0.0); // Lambertian diffuse factor
-                float4 diffuse = attenuation * _DiffuseColor * NdotL; // Diffuse component
+                float NdotL = max(dot(normal, lightDir), 0.0); // using the dot product to determine the diffuse light intensity based 
+                                                               // on the angle between the light direction and surface normal.
 
                 // Specular lighting calculation
+
+                float4 diffuse = attenuation * _DiffuseColor * NdotL; NdotL = max(dot(normal, lightDir), 0.0); //scales the light intensity by attenuation and the predefined diffuse color.
+
     
                 float3 reflectDir = reflect(-lightDir, normal); // Reflection direction
-                float spec = pow(max(dot(viewDir, reflectDir), 0.0), _Shininess); // Specular intensity
-                float4 specular = spec * _SpecularColor; // Scale the specular colour by the calculated spec intensity
+
+                float spec = pow(max(dot(viewDir, reflectDir), 0.0), _Shininess); // spec = pow(max(dot(viewDir, reflectDir), 0.0), _Shininess), 
+                                                                                  // where dot(viewDir, reflectDir) gives the angle between the view and reflection directions. 
+                                                                                  // The pow function, with _Shininess, controls the sharpness of the specular highlight.
+
+                float4 specular = spec * _SpecularColor; // specular = spec * _SpecularColor, scaling the specular intensity by the specular color.
 
                 // Combine lighting components
+                
                 float4 lighting = ambient + diffuse + specular; // Add up the ambient, diffuse, and specular contributions
 
                 // Apply lighting to texture color
+
                 float4 texColor = tex2D(_MainTex, IN.uv); // Fetch the texture color at the fragment's UV coordinates
+
                 return lighting * texColor; // Return the final colour by applying the lighting to the texture colour
             }
             ENDHLSL
